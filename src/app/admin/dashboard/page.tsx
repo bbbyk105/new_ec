@@ -2,6 +2,8 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,10 +12,44 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Shield, LogOut } from "lucide-react";
+import { Shield, LogOut, Loader2 } from "lucide-react";
 
 export default function AdminDashboard() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "loading") return; // まだロード中
+
+    if (status === "unauthenticated") {
+      // 認証されていない場合はログインページにリダイレクト
+      router.push("/admin/login");
+      return;
+    }
+
+    // ADMINロールでない場合もログインページにリダイレクト
+    if (session && session.user.role !== "ADMIN") {
+      router.push("/admin/login");
+      return;
+    }
+  }, [session, status, router]);
+
+  // ローディング中または認証されていない場合
+  if (status === "loading" || !session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-slate-600" />
+          <p className="text-slate-600">認証状態を確認中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ADMINロールでない場合
+  if (session.user.role !== "ADMIN") {
+    return null; // useEffectでリダイレクトされる
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -26,7 +62,7 @@ export default function AdminDashboard() {
                 管理者ダッシュボード
               </h1>
               <p className="text-slate-600">
-                ようこそ、{session?.user?.email}さん
+                ようこそ、{session.user.email}さん
               </p>
             </div>
           </div>

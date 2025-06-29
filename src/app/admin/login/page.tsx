@@ -1,8 +1,8 @@
 // app/admin/login/page.tsx
 "use client";
 
-import { useState } from "react";
-import { signIn, getSession } from "next-auth/react";
+import { useState, useEffect } from "react";
+import { signIn, getSession, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,33 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const { data: session, status } = useSession();
+
+  // 既にログイン済みの場合はダッシュボードにリダイレクト
+  useEffect(() => {
+    if (status === "loading") return; // まだロード中
+
+    if (session && session.user.role === "ADMIN") {
+      router.push("/admin/dashboard");
+    }
+  }, [session, status, router]);
+
+  // ローディング中の場合
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-200">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-slate-600" />
+          <p className="text-slate-600">認証状態を確認中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 既にログイン済みの場合は空のコンポーネントを返す（リダイレクト中）
+  if (session && session.user.role === "ADMIN") {
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,8 +68,10 @@ export default function AdminLoginPage() {
       } else {
         // セッションを確認してリダイレクト
         const session = await getSession();
-        if (session) {
+        if (session && session.user.role === "ADMIN") {
           router.push("/admin/dashboard");
+        } else {
+          setError("管理者権限がありません");
         }
       }
     } catch {
