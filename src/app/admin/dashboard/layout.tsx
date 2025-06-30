@@ -95,7 +95,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8">
             <Shield className="w-8 h-8 text-emerald-400" />
-            <h1 className="text-xl font-bold">ECストア</h1>
+            <h1 className="text-xl font-bold">byPay</h1>
           </div>
 
           {/* ユーザー情報 */}
