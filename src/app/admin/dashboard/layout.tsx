@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 
 const navigationItems = [
   {
-    name: "概要",
+    name: "売上",
     href: "/admin/dashboard",
     icon: BarChart3,
   },

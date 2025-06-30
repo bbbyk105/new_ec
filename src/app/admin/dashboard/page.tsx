@@ -3,7 +3,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -14,8 +13,8 @@ import {
 import { Input } from "@/components/ui/input";
 import {
   TrendingUp,
-  Users,
-  DollarSign,
+  CalendarDays,
+  BarChart3,
   Download,
   Search,
   Plus,
@@ -53,15 +52,6 @@ const orderStatusData = [
   { name: "その他", value: 30, color: "#06B6D4" },
 ];
 
-const productAds = [
-  { code: "食品 1212", status: "稼働中", color: "bg-green-500" },
-  { code: "衣類 4312", status: "稼働中", color: "bg-green-500" },
-  { code: "衣類 4313", status: "保留中", color: "bg-yellow-500" },
-  { code: "衣類 4314", status: "稼働中", color: "bg-green-500" },
-  { code: "衣類 4315", status: "保留中", color: "bg-yellow-500" },
-  { code: "衣類 4316", status: "停止", color: "bg-red-500" },
-];
-
 export default function DashboardOverview() {
   return (
     <div className="p-6">
@@ -69,9 +59,9 @@ export default function DashboardOverview() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white mb-2">
-            ダッシュボード概要
+            売上ダッシュボード
           </h1>
-          <p className="text-slate-400">ECストアの運営状況を確認できます</p>
+          <p className="text-slate-400">ECストアの売上状況を確認できます</p>
         </div>
         <div className="flex items-center space-x-4">
           <div className="relative">
@@ -88,59 +78,62 @@ export default function DashboardOverview() {
         </div>
       </div>
 
-      {/* KPIカード */}
+      {/* 売上KPIカード */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* 今日の売上 */}
         <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 border-none">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center space-x-2 mb-2">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                  <span className="text-white/80 text-sm">総売上</span>
+                  <CalendarDays className="w-5 h-5 text-white" />
+                  <span className="text-white/80 text-sm">今日の売上</span>
                 </div>
                 <div className="text-2xl font-bold text-white mb-1">
-                  ¥3,423,234
+                  ¥123,450
                 </div>
                 <div className="text-white/80 text-sm">
-                  30%増加 • 2025年1月12日
+                  +12%増加 • 2025年6月30日
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-emerald-400 to-teal-500 border-none">
+        {/* 今月の総売上 */}
+        <Card className="bg-gradient-to-br from-blue-500 to-blue-600 border-none">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center space-x-2 mb-2">
-                  <Users className="w-5 h-5 text-white" />
-                  <span className="text-white/80 text-sm">訪問者数</span>
+                  <TrendingUp className="w-5 h-5 text-white" />
+                  <span className="text-white/80 text-sm">今月の総売上</span>
                 </div>
                 <div className="text-2xl font-bold text-white mb-1">
-                  453,432
+                  ¥2,847,230
                 </div>
                 <div className="text-white/80 text-sm">
-                  70%コンバージョン • 30%離脱
+                  +18%増加 • 2025年6月
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
+        {/* 全体の売上 */}
         <Card className="bg-gradient-to-br from-purple-500 to-purple-600 border-none">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center space-x-2 mb-2">
-                  <DollarSign className="w-5 h-5 text-white" />
-                  <span className="text-white/80 text-sm">収益</span>
+                  <BarChart3 className="w-5 h-5 text-white" />
+                  <span className="text-white/80 text-sm">全体の売上</span>
                 </div>
                 <div className="text-2xl font-bold text-white mb-1">
-                  ¥2,034,320
+                  ¥15,423,890
                 </div>
                 <div className="text-white/80 text-sm">
-                  10%増加 • 2025年1月12日
+                  累計売上 • 2025年1月〜現在
                 </div>
               </div>
             </div>
@@ -148,16 +141,16 @@ export default function DashboardOverview() {
         </Card>
       </div>
 
-      {/* チャートとサイド情報 */}
+      {/* チャートセクション */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
         {/* 売上グラフ */}
         <Card className="lg:col-span-2 bg-slate-800 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white">売上グラフ</CardTitle>
+              <CardTitle className="text-white">売上推移グラフ</CardTitle>
               <div className="flex space-x-2">
                 <Select defaultValue="2024">
-                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600">
+                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -167,7 +160,7 @@ export default function DashboardOverview() {
                   </SelectContent>
                 </Select>
                 <Select defaultValue="2025">
-                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600">
+                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -205,10 +198,10 @@ export default function DashboardOverview() {
           </CardContent>
         </Card>
 
-        {/* 注文グラフ */}
+        {/* カテゴリ別売上グラフ */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">注文グラフ</CardTitle>
+            <CardTitle className="text-white">カテゴリ別売上</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
@@ -251,21 +244,22 @@ export default function DashboardOverview() {
         </Card>
       </div>
 
-      {/* 下部セクション */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 商品管理セクション */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 商品追加 */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white">商品追加</CardTitle>
-              <Button size="sm" className="bg-slate-700 hover:bg-slate-600">
-                <Plus className="w-4 h-4" />
+              <CardTitle className="text-white">商品管理</CardTitle>
+              <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600">
+                <Plus className="w-4 h-4 mr-2" />
+                商品追加
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4">
-              {[1, 2, 3, 4].map((i) => (
+              {[1, 2].map((i) => (
                 <div
                   key={i}
                   className="aspect-square bg-slate-700 rounded-lg flex items-center justify-center hover:bg-slate-600 cursor-pointer transition-colors"
@@ -277,46 +271,28 @@ export default function DashboardOverview() {
           </CardContent>
         </Card>
 
-        {/* 商品広告 */}
+        {/* 売上サマリー */}
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">商品広告</CardTitle>
+            <CardTitle className="text-white">売上サマリー</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm font-medium text-slate-300">
-                <span>商品コード</span>
-                <span>状態</span>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
+                <span className="text-slate-300">平均注文単価</span>
+                <span className="text-white font-semibold">¥4,580</span>
               </div>
-              {productAds.map((ad, index) => (
-                <div key={index} className="flex justify-between items-center">
-                  <span className="text-sm text-slate-300">{ad.code}</span>
-                  <Badge
-                    className={`${ad.color} text-white text-xs`}
-                    variant="secondary"
-                  >
-                    {ad.status}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 顧客情報 */}
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader>
-            <CardTitle className="text-white">顧客情報</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-lime-200 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-slate-900">60%</div>
-                <div className="text-sm text-slate-700">女性</div>
+              <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
+                <span className="text-slate-300">今月の注文数</span>
+                <span className="text-white font-semibold">621件</span>
               </div>
-              <div className="bg-blue-200 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-slate-900">40%</div>
-                <div className="text-sm text-slate-700">男性</div>
+              <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
+                <span className="text-slate-300">売上成長率</span>
+                <span className="text-emerald-400 font-semibold">+18.2%</span>
+              </div>
+              <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
+                <span className="text-slate-300">リピート率</span>
+                <span className="text-blue-400 font-semibold">67%</span>
               </div>
             </div>
           </CardContent>
