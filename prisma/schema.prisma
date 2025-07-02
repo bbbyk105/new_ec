@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,19 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 認証関連（既存）
 model Account {
   id                String  @id @default(cuid())
   userId            String
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -35,7 +33,6 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
-// 管理ユーザー（既存）
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -44,10 +41,10 @@ model User {
   role          UserRole  @default(ADMIN)
   emailVerified DateTime?
   image         String?
-  accounts      Account[]
-  sessions      Session[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+  accounts      Account[]
+  sessions      Session[]
 }
 
 model VerificationToken {
@@ -58,137 +55,129 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// 一般顧客
 model Customer {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String
-  phone        String?
-  dateOfBirth  DateTime?
-  isActive     Boolean  @default(true)
-  addresses    Address[]
-  orders       Order[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String    @id @default(cuid())
+  email       String    @unique
+  name        String
+  phone       String?
+  dateOfBirth DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  addresses   Address[]
+  orders      Order[]
 
   @@map("customers")
 }
 
-// 顧客住所
 model Address {
   id         String   @id @default(cuid())
   customerId String
-  name       String   // 宛名
-  zipCode    String   // 郵便番号
-  prefecture String   // 都道府県
-  city       String   // 市区町村
-  address1   String   // 町名・番地
-  address2   String?  // 建物名・部屋番号
+  name       String
+  zipCode    String
+  prefecture String
+  city       String
+  address1   String
+  address2   String?
   phone      String?
   isDefault  Boolean  @default(false)
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  orders     Order[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  orders     Order[]
 
   @@map("addresses")
 }
 
-// 商品カテゴリ
 model Category {
-  id          String         @id @default(cuid())
-  name        String         @unique
-  description String?
-  imageUrl    String?
-  isActive    Boolean        @default(true)
-  sortOrder   Int            @default(0)
-  products    Product[]
+  id            String          @id @default(cuid())
+  name          String          @unique
+  description   String?
+  imageUrl      String?
+  isActive      Boolean         @default(true)
+  sortOrder     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
   categorySales CategorySales[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  products      Product[]
 
   @@map("categories")
 }
 
-// 商品
 model Product {
   id                String         @id @default(cuid())
   name              String
   description       String?
   price             Decimal        @db.Decimal(10, 2)
-  costPrice         Decimal?       @db.Decimal(10, 2) // 仕入れ価格
-  sku               String?        @unique // 商品コード
+  costPrice         Decimal?       @db.Decimal(10, 2)
+  sku               String?        @unique
   imageUrl          String?
-  images            String[]       // 複数画像対応
+  images            String[]
   stock             Int            @default(0)
-  lowStockThreshold Int            @default(10) // 在庫警告閾値
+  lowStockThreshold Int            @default(10)
   isActive          Boolean        @default(true)
   categoryId        String
-  category          Category       @relation(fields: [categoryId], references: [id])
-  orderItems        OrderItem[]
-  stockHistory      StockHistory[]
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+  orderItems        OrderItem[]
+  category          Category       @relation(fields: [categoryId], references: [id])
+  stockHistory      StockHistory[]
 
   @@map("products")
 }
 
-// 注文
 model Order {
-  id              String      @id @default(cuid())
-  orderNumber     String      @unique // 注文番号（表示用）
+  id              String         @id @default(cuid())
+  orderNumber     String         @unique
   customerId      String
   addressId       String
-  status          OrderStatus @default(PENDING)
-  subtotal        Decimal     @db.Decimal(10, 2) // 小計
-  shippingFee     Decimal     @db.Decimal(10, 2) @default(0) // 送料
-  tax             Decimal     @db.Decimal(10, 2) @default(0) // 消費税
-  total           Decimal     @db.Decimal(10, 2) // 合計
+  status          OrderStatus    @default(PENDING)
+  subtotal        Decimal        @db.Decimal(10, 2)
+  shippingFee     Decimal        @default(0) @db.Decimal(10, 2)
+  tax             Decimal        @default(0) @db.Decimal(10, 2)
+  total           Decimal        @db.Decimal(10, 2)
   paymentMethod   PaymentMethod?
-  paymentStatus   PaymentStatus @default(PENDING)
-  notes           String?     // 備考
-  shippedAt       DateTime?   // 発送日時
-  deliveredAt     DateTime?   // 配送完了日時
-  cancelledAt     DateTime?   // キャンセル日時
-  customer        Customer    @relation(fields: [customerId], references: [id])
-  shippingAddress Address     @relation(fields: [addressId], references: [id])
+  paymentStatus   PaymentStatus  @default(PENDING)
+  notes           String?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   orderItems      OrderItem[]
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  shippingAddress Address        @relation(fields: [addressId], references: [id])
+  customer        Customer       @relation(fields: [customerId], references: [id])
 
   @@map("orders")
 }
 
-// 注文商品詳細
 model OrderItem {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   orderId   String
   productId String
   quantity  Int
-  unitPrice Decimal @db.Decimal(10, 2) // 注文時の単価
-  total     Decimal @db.Decimal(10, 2) // 小計
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id])
+  unitPrice Decimal  @db.Decimal(10, 2)
+  total     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 
   @@map("order_items")
 }
 
-// 売上サマリー（日次集計用）
 model DailySales {
-  id          String   @id @default(cuid())
-  date        DateTime @unique @db.Date
-  totalSales  Decimal  @db.Decimal(12, 2)
-  totalOrders Int
-  totalItems  Int
-  avgOrderValue Decimal @db.Decimal(10, 2)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  date          DateTime @unique @db.Date
+  totalSales    Decimal  @db.Decimal(12, 2)
+  totalOrders   Int
+  totalItems    Int
+  avgOrderValue Decimal  @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@map("daily_sales")
 }
 
-// カテゴリ別売上サマリー（日次）
 model CategorySales {
   id         String   @id @default(cuid())
   date       DateTime @db.Date
@@ -196,63 +185,61 @@ model CategorySales {
   sales      Decimal  @db.Decimal(10, 2)
   orders     Int
   items      Int
-  category   Category @relation(fields: [categoryId], references: [id])
   createdAt  DateTime @default(now())
+  category   Category @relation(fields: [categoryId], references: [id])
 
   @@unique([date, categoryId])
   @@map("category_sales")
 }
 
-// 在庫履歴
 model StockHistory {
-  id         String           @id @default(cuid())
-  productId  String
-  type       StockChangeType
-  quantity   Int              // 変動数（プラス・マイナス）
-  reason     String?          // 変動理由
-  beforeStock Int             // 変動前在庫
-  afterStock  Int             // 変動後在庫
-  orderId    String?          // 関連注文ID（販売の場合）
-  product    Product          @relation(fields: [productId], references: [id])
-  createdAt  DateTime         @default(now())
+  id          String          @id @default(cuid())
+  productId   String
+  type        StockChangeType
+  quantity    Int
+  reason      String?
+  beforeStock Int
+  afterStock  Int
+  orderId     String?
+  createdAt   DateTime        @default(now())
+  product     Product         @relation(fields: [productId], references: [id])
 
   @@map("stock_history")
 }
 
-// Enums
 enum UserRole {
   ADMIN
   STAFF
 }
 
 enum OrderStatus {
-  PENDING     // 注文確認中
-  CONFIRMED   // 注文確定
-  PROCESSING  // 処理中
-  SHIPPED     // 発送済み
-  DELIVERED   // 配送完了
-  CANCELLED   // キャンセル
-  RETURNED    // 返品
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
 }
 
 enum PaymentMethod {
-  CREDIT_CARD    // クレジットカード
-  BANK_TRANSFER  // 銀行振込
-  COD           // 代金引換
-  CONVENIENCE   // コンビニ払い
+  CREDIT_CARD
+  BANK_TRANSFER
+  COD
+  CONVENIENCE
 }
 
 enum PaymentStatus {
-  PENDING    // 支払い待ち
-  COMPLETED  // 支払い完了
-  FAILED     // 支払い失敗
-  REFUNDED   // 返金済み
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
 enum StockChangeType {
-  PURCHASE   // 仕入れ
-  SALE       // 販売
-  RETURN     // 返品
-  ADJUSTMENT // 調整
-  DAMAGE     // 破損
+  PURCHASE
+  SALE
+  RETURN
+  ADJUSTMENT
+  DAMAGE
 }
