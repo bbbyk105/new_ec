@@ -13,7 +13,6 @@ import {
   ShoppingCart,
   Users,
   BarChart3,
-  Settings,
   Menu,
   X,
   LogOut,
@@ -48,11 +47,6 @@ const navigationItems = [
     name: "分析",
     href: "/admin/dashboard/analytics",
     icon: BarChart3,
-  },
-  {
-    name: "設定",
-    href: "/admin/dashboard/settings",
-    icon: Settings,
   },
 ];
 

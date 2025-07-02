@@ -20,8 +20,6 @@ import {
   Phone,
   Users,
   UserPlus,
-  Star,
-  Calendar,
   MoreHorizontal,
 } from "lucide-react";
 
@@ -34,9 +32,6 @@ interface Customer {
   registrationDate: string;
   lastOrderDate: string;
   totalOrders: number;
-  totalSpent: number;
-  status: string;
-  customerTier: string;
   avatar: string;
 }
 
@@ -50,9 +45,6 @@ const customers: Customer[] = [
     registrationDate: "2024-01-15",
     lastOrderDate: "2025-06-30",
     totalOrders: 12,
-    totalSpent: 145600,
-    status: "active",
-    customerTier: "gold",
     avatar: "/api/placeholder/40/40",
   },
   {
@@ -63,9 +55,6 @@ const customers: Customer[] = [
     registrationDate: "2024-03-22",
     lastOrderDate: "2025-06-29",
     totalOrders: 8,
-    totalSpent: 89300,
-    status: "active",
-    customerTier: "silver",
     avatar: "/api/placeholder/40/40",
   },
   {
@@ -76,9 +65,6 @@ const customers: Customer[] = [
     registrationDate: "2023-11-10",
     lastOrderDate: "2025-06-29",
     totalOrders: 25,
-    totalSpent: 234500,
-    status: "active",
-    customerTier: "platinum",
     avatar: "/api/placeholder/40/40",
   },
   {
@@ -89,9 +75,6 @@ const customers: Customer[] = [
     registrationDate: "2024-05-18",
     lastOrderDate: "2025-06-28",
     totalOrders: 6,
-    totalSpent: 67800,
-    status: "active",
-    customerTier: "bronze",
     avatar: "/api/placeholder/40/40",
   },
   {
@@ -102,9 +85,6 @@ const customers: Customer[] = [
     registrationDate: "2024-02-05",
     lastOrderDate: "2025-04-15",
     totalOrders: 3,
-    totalSpent: 23400,
-    status: "inactive",
-    customerTier: "bronze",
     avatar: "/api/placeholder/40/40",
   },
 ];
@@ -172,38 +152,6 @@ export default function CustomersPage() {
                 </p>
                 <p className="text-xl sm:text-2xl font-bold text-white">
                   {stats.total}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center space-x-3">
-              <Star className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
-              <div>
-                <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                  アクティブ
-                </p>
-                <p className="text-xl sm:text-2xl font-bold text-white">
-                  {stats.active}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex items-center space-x-3">
-              <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-400" />
-              <div>
-                <p className="text-xs sm:text-sm text-slate-300 font-medium">
-                  非アクティブ
-                </p>
-                <p className="text-xl sm:text-2xl font-bold text-white">
-                  {stats.inactive}
                 </p>
               </div>
             </div>

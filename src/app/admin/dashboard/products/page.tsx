@@ -328,13 +328,6 @@ export default function ProductsPage() {
                   >
                     <TableCell className="px-6 py-4">
                       <div className="flex items-center space-x-3">
-                        <Image
-                          src={product.image}
-                          alt={product.name}
-                          width={48}
-                          height={48}
-                          className="rounded-lg object-cover"
-                        />
                         <div>
                           <p className="font-medium text-white">
                             {product.name}
