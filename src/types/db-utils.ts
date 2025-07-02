@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// types/db-utils.ts
+// lib/db-utils.ts
 import { prisma } from "@/lib/prisma";
 import {
   OrderStatus,
@@ -101,7 +101,7 @@ export async function getYearlyKPIs(year: number) {
     },
   });
 
-  // 今月の累計売上（現在の年月）
+  // 今月の累計売上（現在の年月のみ）
   const startOfMonth = new Date(currentYear, currentMonth, 1);
   const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
 
@@ -115,9 +115,6 @@ export async function getYearlyKPIs(year: number) {
     _sum: {
       totalSales: true,
       totalOrders: true,
-    },
-    _avg: {
-      avgOrderValue: true,
     },
   });
 
@@ -146,6 +143,12 @@ export async function getYearlyKPIs(year: number) {
     },
   });
 
+  // 選択年度の平均注文単価を計算
+  const yearlyTotalSales = Number(yearlyAggregate._sum.totalSales || 0);
+  const yearlyTotalOrders = Number(yearlyAggregate._sum.totalOrders || 0);
+  const avgOrderValue =
+    yearlyTotalOrders > 0 ? yearlyTotalSales / yearlyTotalOrders : 0;
+
   // リピート率計算（複数回注文した顧客の割合）
   const totalCustomers = await prisma.customer.count();
 
@@ -170,10 +173,10 @@ export async function getYearlyKPIs(year: number) {
   return {
     todaySales: Number(todaySales?.totalSales || 0),
     monthlyTotal: Number(monthlyAggregate._sum.totalSales || 0),
-    yearlyTotal: Number(yearlyAggregate._sum.totalSales || 0),
+    yearlyTotal: yearlyTotalSales,
     monthlyOrders: Number(monthlyAggregate._sum.totalOrders || 0),
-    yearlyOrders: Number(yearlyAggregate._sum.totalOrders || 0),
-    avgOrderValue: Number(monthlyAggregate._avg.avgOrderValue || 0),
+    yearlyOrders: yearlyTotalOrders,
+    avgOrderValue: avgOrderValue, // 選択年度の平均注文単価
     totalSales: Number(totalAggregate._sum.totalSales || 0),
     repeatRate,
   };
