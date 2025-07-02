@@ -10,13 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import {
   TrendingUp,
   CalendarDays,
   BarChart3,
   Download,
-  Search,
   Plus,
   RefreshCw,
   AlertCircle,
@@ -213,13 +211,6 @@ export default function DashboardOverview() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
-            <Input
-              placeholder="検索"
-              className="pl-10 bg-slate-800 border-slate-700 text-white w-full sm:w-64 lg:w-80"
-            />
-          </div>
           <div className="flex space-x-2">
             <Button
               onClick={handleRefresh}
