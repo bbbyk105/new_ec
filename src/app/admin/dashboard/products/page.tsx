@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   MoreHorizontal,
 } from "lucide-react";
+import Link from "next/link";
 
 // 商品データの型定義
 interface Product {
@@ -158,10 +159,12 @@ export default function ProductsPage() {
             商品の追加、編集、在庫管理を行えます
           </p>
         </div>
-        <Button className="bg-emerald-500 hover:bg-emerald-600 text-white transition-colors duration-200 w-full sm:w-auto">
-          <Plus className="w-4 h-4 mr-2" />
-          新しい商品を追加
-        </Button>
+        <Link href={"/admin/dashboard/add-products"}>
+          <Button className="bg-emerald-500 hover:bg-emerald-600 text-white transition-colors duration-200 w-full sm:w-auto">
+            <Plus className="w-4 h-4 mr-2" />
+            新しい商品を追加
+          </Button>
+        </Link>
       </div>
 
       {/* 統計カード */}

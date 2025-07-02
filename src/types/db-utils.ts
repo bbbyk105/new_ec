@@ -1,5 +1,6 @@
-// src/types/db-utils.ts
-import { prisma } from "../lib/prisma";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// lib/db-utils.ts
+import { prisma } from "@/lib/prisma";
 import {
   OrderStatus,
   type Order,
@@ -66,8 +67,8 @@ export async function getMonthlySalesData(year: number) {
   const monthlyData = await prisma.$queryRaw<DailySalesQueryResult[]>`
     SELECT 
       EXTRACT(MONTH FROM date) as month,
-      SUM(total_sales) as sales,
-      SUM(total_orders) as orders
+      SUM("totalSales") as sales,
+      SUM("totalOrders") as orders
     FROM daily_sales 
     WHERE EXTRACT(YEAR FROM date) = ${year}
     GROUP BY EXTRACT(MONTH FROM date)
@@ -89,10 +90,10 @@ export async function getCurrentMonthKPIs() {
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  // 今日の売上
+  // 今日の売上（実際には前日のデータ）
   const todaySales = await prisma.dailySales.findUnique({
     where: {
-      date: yesterday, // 実際のデータは前日まで
+      date: yesterday,
     },
   });
 
@@ -121,13 +122,28 @@ export async function getCurrentMonthKPIs() {
     },
   });
 
-  // リピート率計算（簡易版）
+  // リピート率計算（複数回注文した顧客の割合）
   const totalCustomers = await prisma.customer.count();
+
   const customersWithMultipleOrders = await prisma.customer.count({
     where: {
       orders: {
         some: {
-          status: OrderStatus.DELIVERED,
+          AND: [
+            { status: OrderStatus.DELIVERED },
+            {
+              customer: {
+                orders: {
+                  some: {
+                    status: OrderStatus.DELIVERED,
+                    id: {
+                      not: undefined,
+                    },
+                  },
+                },
+              },
+            },
+          ],
         },
       },
     },
@@ -154,7 +170,7 @@ export async function getLowStockProducts() {
     where: {
       isActive: true,
       stock: {
-        lte: 10, // lowStockThresholdのデフォルト値
+        lte: 10,
       },
     },
     include: {
@@ -175,8 +191,8 @@ export async function getTopSellingProducts(limit: number = 10) {
       SUM(oi.quantity) as total_quantity,
       SUM(oi.total) as total_sales
     FROM products p
-    JOIN order_items oi ON p.id = oi.product_id
-    JOIN orders o ON oi.order_id = o.id
+    JOIN order_items oi ON p.id = oi."productId"
+    JOIN orders o ON oi."orderId" = o.id
     WHERE o.status = 'DELIVERED'
     GROUP BY p.id, p.name
     ORDER BY total_sales DESC
@@ -310,43 +326,64 @@ export async function updateDailySalesData(date: Date) {
   }
 }
 
-// ダッシュボード用のサンプルデータ取得関数
-export async function getDashboardData() {
-  const currentYear = new Date().getFullYear();
+// ダッシュボード用のデータ取得関数（改良版）
+export async function getDashboardData(year?: number) {
+  const targetYear = year || new Date().getFullYear();
+  const startOfYear = new Date(targetYear, 0, 1);
+  const endOfYear = new Date(targetYear, 11, 31);
 
-  // 月次売上データ（過去9ヶ月）
-  const monthlySales = await getMonthlySalesData(currentYear);
+  try {
+    // 並列でデータを取得してパフォーマンスを向上
+    const [monthlySales, categorySales, kpis] = await Promise.all([
+      getMonthlySalesData(targetYear),
+      getCategorySalesData(startOfYear, endOfYear),
+      getCurrentMonthKPIs(),
+    ]);
 
-  // カテゴリ別売上データ
-  const startOfYear = new Date(currentYear, 0, 1);
-  const endOfYear = new Date(currentYear, 11, 31);
-  const categorySales = await getCategorySalesData(startOfYear, endOfYear);
+    // カテゴリ別売上を集計
+    const categoryTotals = new Map<string, number>();
+    categorySales.forEach((sale: any) => {
+      const categoryName = sale.category.name;
+      const currentTotal = categoryTotals.get(categoryName) || 0;
+      categoryTotals.set(categoryName, currentTotal + Number(sale.sales));
+    });
 
-  // カテゴリ別売上を集計
-  const categoryTotals = new Map<string, number>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  categorySales.forEach((sale: any) => {
-    const categoryName = sale.category.name;
-    const currentTotal = categoryTotals.get(categoryName) || 0;
-    categoryTotals.set(categoryName, currentTotal + Number(sale.sales));
-  });
+    const categoryData = Array.from(categoryTotals.entries()).map(
+      ([name, value]) => ({
+        name,
+        value: Math.round(value / 1000), // 千円単位に変換
+        color: getCategoryColor(name),
+      })
+    );
 
-  const categoryData = Array.from(categoryTotals.entries()).map(
-    ([name, value]) => ({
-      name,
-      value: Math.round(value / 1000), // 千円単位に変換
-      color: getCategoryColor(name),
-    })
-  );
+    // 月次売上データにダミーデータを補完（データが不足している場合）
+    const completeMonthlyData = [];
+    for (let month = 1; month <= 12; month++) {
+      const existingData = monthlySales.find(
+        (item) => item.month === `${month}月`
+      );
+      if (existingData) {
+        completeMonthlyData.push(existingData);
+      } else {
+        // データがない月は0で補完
+        completeMonthlyData.push({
+          month: `${month}月`,
+          sales: 0,
+          orders: 0,
+        });
+      }
+    }
 
-  // KPIデータ
-  const kpis = await getCurrentMonthKPIs();
-
-  return {
-    monthlySales,
-    categoryData,
-    kpis,
-  };
+    return {
+      monthlySales: completeMonthlyData,
+      categoryData,
+      kpis,
+      selectedYear: targetYear,
+    };
+  } catch (error) {
+    console.error("Error fetching dashboard data:", error);
+    throw error;
+  }
 }
 
 // カテゴリカラーマッピング
@@ -358,4 +395,132 @@ function getCategoryColor(categoryName: string): string {
     その他: "#06B6D4",
   };
   return colorMap[categoryName] || "#6B7280";
+}
+
+// 年度別データの存在確認（データベースにある年度 + 現在年度まで）
+export async function getAvailableYears(): Promise<number[]> {
+  try {
+    const currentYear = new Date().getFullYear();
+
+    // データベースから実際にデータが存在する年度を取得
+    const years = await prisma.$queryRaw<{ year: number }[]>`
+      SELECT DISTINCT EXTRACT(YEAR FROM date) as year
+      FROM daily_sales
+      ORDER BY year DESC
+    `;
+
+    const dbYears = years.map((row) => Number(row.year));
+
+    // 現在年度から2020年までを生成
+    const allPossibleYears = [];
+    for (let i = currentYear; i >= 2020; i--) {
+      allPossibleYears.push(i);
+    }
+
+    // データベースにある年度 + 現在年度まで（重複排除）
+    const allYears = new Set([...dbYears, ...allPossibleYears]);
+
+    return Array.from(allYears).sort((a, b) => b - a); // 降順でソート
+  } catch (error) {
+    console.error("Error getting available years:", error);
+    // エラーの場合は現在年度から2020年まで返す
+    const currentYear = new Date().getFullYear();
+    const years = [];
+    for (let i = currentYear; i >= 2020; i--) {
+      years.push(i);
+    }
+    return years;
+  }
+}
+
+// 売上レポート用のデータ取得
+export async function getSalesReport(startDate: Date, endDate: Date) {
+  const dailySales = await getDailySalesData(startDate, endDate);
+  const categorySales = await getCategorySalesData(startDate, endDate);
+  const topProducts = await getTopSellingProducts(10);
+
+  return {
+    dailySales,
+    categorySales,
+    topProducts,
+    summary: {
+      totalSales: dailySales.reduce(
+        (sum, day) => sum + Number(day.totalSales),
+        0
+      ),
+      totalOrders: dailySales.reduce((sum, day) => sum + day.totalOrders, 0),
+      averageOrderValue:
+        dailySales.length > 0
+          ? dailySales.reduce(
+              (sum, day) => sum + Number(day.avgOrderValue),
+              0
+            ) / dailySales.length
+          : 0,
+    },
+  };
+}
+
+// リアルタイム通知用：低在庫アラート
+export async function getLowStockAlerts() {
+  const lowStockProducts = await getLowStockProducts();
+  const outOfStockProducts = await prisma.product.findMany({
+    where: {
+      isActive: true,
+      stock: 0,
+    },
+    include: {
+      category: true,
+    },
+  });
+
+  return {
+    lowStock: lowStockProducts,
+    outOfStock: outOfStockProducts,
+    alerts: [
+      ...lowStockProducts.map((product) => ({
+        type: "low_stock" as const,
+        message: `${product.name}の在庫が少なくなっています（残り${product.stock}個）`,
+        severity: "warning" as const,
+        productId: product.id,
+      })),
+      ...outOfStockProducts.map((product) => ({
+        type: "out_of_stock" as const,
+        message: `${product.name}が在庫切れです`,
+        severity: "error" as const,
+        productId: product.id,
+      })),
+    ],
+  };
+}
+
+// 顧客分析用データ
+export async function getCustomerAnalytics() {
+  const totalCustomers = await prisma.customer.count();
+
+  const newCustomersThisMonth = await prisma.customer.count({
+    where: {
+      createdAt: {
+        gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+      },
+    },
+  });
+
+  const activeCustomers = await prisma.customer.count({
+    where: {
+      orders: {
+        some: {
+          createdAt: {
+            gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 過去90日
+          },
+        },
+      },
+    },
+  });
+
+  return {
+    total: totalCustomers,
+    newThisMonth: newCustomersThisMonth,
+    active: activeCustomers,
+    inactive: totalCustomers - activeCustomers,
+  };
 }

@@ -1,4 +1,4 @@
-// prisma/seeds.ts
+// prisma/seed.ts
 import { PrismaClient, PaymentMethod } from "@prisma/client";
 
 const prisma = new PrismaClient();

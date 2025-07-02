@@ -1,6 +1,6 @@
-// app/admin/dashboard/page.tsx
 "use client";
 
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,6 +18,8 @@ import {
   Download,
   Search,
   Plus,
+  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 import {
   LineChart,
@@ -32,37 +34,192 @@ import {
   Cell,
 } from "recharts";
 
-// ダミーデータ
-const salesData = [
-  { month: "1月", sales: 200000, orders: 400 },
-  { month: "2月", sales: 250000, orders: 500 },
-  { month: "3月", sales: 300000, orders: 650 },
-  { month: "4月", sales: 280000, orders: 580 },
-  { month: "5月", sales: 350000, orders: 720 },
-  { month: "6月", sales: 320000, orders: 680 },
-  { month: "7月", sales: 380000, orders: 780 },
-  { month: "8月", sales: 420000, orders: 850 },
-  { month: "9月", sales: 450000, orders: 920 },
-];
-
-const orderStatusData = [
-  { name: "衣類", value: 60, color: "#10B981" },
-  { name: "食品", value: 50, color: "#F59E0B" },
-  { name: "電化製品", value: 40, color: "#8B5CF6" },
-  { name: "その他", value: 30, color: "#06B6D4" },
-];
+// 型定義
+interface DashboardData {
+  monthlySales: Array<{
+    month: string;
+    sales: number;
+    orders: number;
+  }>;
+  categoryData: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  kpis: {
+    todaySales: number;
+    monthlyTotal: number;
+    monthlyOrders: number;
+    avgOrderValue: number;
+    totalSales: number;
+    repeatRate: number;
+  };
+  availableYears: number[];
+}
 
 export default function DashboardOverview() {
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [selectedYear, setSelectedYear] = useState<number>(
+    new Date().getFullYear()
+  );
+
+  // 利用可能年度の生成（2024年ダミーデータ + 2025年〜現在年度）
+  const generateAvailableYears = (): number[] => {
+    const currentYear = new Date().getFullYear();
+    const serviceStartYear = 2025; // サービス開始年度
+    const dummyDataYear = 2024; // ダミーデータの年度
+
+    const years = [];
+
+    // 現在年度から2025年まで（実際のサービスデータ）
+    for (let i = currentYear; i >= serviceStartYear; i--) {
+      years.push(i);
+    }
+
+    // ダミーデータ年度を最後に追加
+    years.push(dummyDataYear);
+
+    return years; // 降順（新しい年が上）
+  };
+
+  // データ取得関数
+  const fetchDashboardData = async (year?: number) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const targetYear = year || selectedYear;
+      const response = await fetch(`/api/dashboard?year=${targetYear}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // 利用可能年度をレスポンスに含めるか、フロントエンドで生成
+        const dataWithYears = {
+          ...result.data,
+          availableYears: generateAvailableYears(),
+        };
+        setDashboardData(dataWithYears);
+        setLastUpdated(new Date());
+      } else {
+        throw new Error(result.error || "Failed to fetch data");
+      }
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+      setError(err instanceof Error ? err.message : "Unknown error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 年度変更ハンドラー
+  const handleYearChange = (year: string) => {
+    const yearNumber = parseInt(year);
+    setSelectedYear(yearNumber);
+    fetchDashboardData(yearNumber);
+  };
+
+  // 初回データ取得
+  useEffect(() => {
+    fetchDashboardData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 手動更新
+  const handleRefresh = () => {
+    fetchDashboardData();
+  };
+
+  // エラー状態の表示
+  if (error) {
+    return (
+      <div className="p-4 sm:p-6">
+        <Card className="bg-red-900/20 border-red-500/50">
+          <CardContent className="p-6">
+            <div className="flex items-center space-x-3">
+              <AlertCircle className="w-6 h-6 text-red-400" />
+              <div>
+                <h3 className="text-lg font-semibold text-red-400">
+                  データの取得に失敗しました
+                </h3>
+                <p className="text-red-300 mt-1">{error}</p>
+                <Button
+                  onClick={handleRefresh}
+                  className="mt-3 bg-red-600 hover:bg-red-700"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  再試行
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ローディング状態の表示
+  if (loading || !dashboardData) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="animate-pulse">
+          {/* ヘッダーのスケルトン */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <div className="h-8 bg-slate-700 rounded w-64 mb-2"></div>
+              <div className="h-4 bg-slate-700 rounded w-48"></div>
+            </div>
+            <div className="flex space-x-4">
+              <div className="h-10 bg-slate-700 rounded w-64"></div>
+              <div className="h-10 bg-slate-700 rounded w-32"></div>
+            </div>
+          </div>
+
+          {/* KPIカードのスケルトン */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-32 bg-slate-700 rounded-lg"></div>
+            ))}
+          </div>
+
+          {/* チャートのスケルトン */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div className="xl:col-span-2 h-96 bg-slate-700 rounded-lg"></div>
+            <div className="h-96 bg-slate-700 rounded-lg"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6">
       {/* ヘッダー */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">
-            売上ダッシュボード
+            売上ダッシュボード ({selectedYear}年)
           </h1>
           <p className="text-sm sm:text-base text-slate-400">
             ECストアの売上状況を確認できます
+          </p>
+          <p className="text-xs text-slate-500 mt-1">
+            最終更新: {lastUpdated.toLocaleString("ja-JP")}
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
@@ -73,10 +230,22 @@ export default function DashboardOverview() {
               className="pl-10 bg-slate-800 border-slate-700 text-white w-full sm:w-64 lg:w-80"
             />
           </div>
-          <Button className="bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto">
-            <Download className="w-4 h-4 mr-2" />
-            エクスポート
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <RefreshCw
+                className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+              />
+              更新
+            </Button>
+            <Button className="bg-emerald-500 hover:bg-emerald-600">
+              <Download className="w-4 h-4 mr-2" />
+              エクスポート
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -94,10 +263,10 @@ export default function DashboardOverview() {
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥123,450
+                  ¥{dashboardData.kpis.todaySales.toLocaleString()}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  +12%増加 • 2025年6月30日
+                  {new Date().toLocaleDateString("ja-JP")}
                 </div>
               </div>
             </div>
@@ -112,14 +281,14 @@ export default function DashboardOverview() {
                 <div className="flex items-center space-x-2 mb-2">
                   <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span className="text-white/80 text-xs sm:text-sm">
-                    今月の総売上
+                    {selectedYear}年の月別売上
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥2,847,230
+                  ¥{dashboardData.kpis.monthlyTotal.toLocaleString()}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  +18%増加 • 2025年6月
+                  {dashboardData.kpis.monthlyOrders}件の注文
                 </div>
               </div>
             </div>
@@ -134,14 +303,14 @@ export default function DashboardOverview() {
                 <div className="flex items-center space-x-2 mb-2">
                   <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span className="text-white/80 text-xs sm:text-sm">
-                    全体の売上
+                    全期間の売上
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥15,423,890
+                  ¥{dashboardData.kpis.totalSales.toLocaleString()}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  累計売上 • 2025年1月〜現在
+                  累計売上 • リピート率 {dashboardData.kpis.repeatRate}%
                 </div>
               </div>
             </div>
@@ -156,26 +325,22 @@ export default function DashboardOverview() {
           <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <CardTitle className="text-white text-lg sm:text-xl">
-                売上推移グラフ
+                {selectedYear}年 売上推移グラフ
               </CardTitle>
               <div className="flex space-x-2">
-                <Select defaultValue="2024">
-                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600 text-white text-sm">
+                <Select
+                  value={selectedYear.toString()}
+                  onValueChange={handleYearChange}
+                >
+                  <SelectTrigger className="w-24 bg-slate-700 border-slate-600 text-white text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="2023">2023</SelectItem>
-                    <SelectItem value="2024">2024</SelectItem>
-                    <SelectItem value="2025">2025</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select defaultValue="2025">
-                  <SelectTrigger className="w-20 bg-slate-700 border-slate-600 text-white text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="2024">2024</SelectItem>
-                    <SelectItem value="2025">2025</SelectItem>
+                    {dashboardData.availableYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}年
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -187,7 +352,7 @@ export default function DashboardOverview() {
               height={250}
               className="sm:h-[300px]"
             >
-              <LineChart data={salesData}>
+              <LineChart data={dashboardData.monthlySales}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="month"
@@ -205,6 +370,12 @@ export default function DashboardOverview() {
                   }}
                   labelStyle={{ color: "#FFFFFF" }}
                   itemStyle={{ color: "#10B981" }}
+                  formatter={(value: number, name: string) => [
+                    name === "sales"
+                      ? `¥${value.toLocaleString()}`
+                      : `${value}件`,
+                    name === "sales" ? "売上" : "注文数",
+                  ]}
                 />
                 <Line
                   type="monotone"
@@ -222,7 +393,7 @@ export default function DashboardOverview() {
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-white text-lg sm:text-xl">
-              カテゴリ別売上
+              {selectedYear}年 カテゴリ別売上
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
@@ -233,7 +404,7 @@ export default function DashboardOverview() {
             >
               <RechartsPieChart>
                 <Pie
-                  data={orderStatusData}
+                  data={dashboardData.categoryData}
                   cx="50%"
                   cy="50%"
                   innerRadius={50}
@@ -242,7 +413,7 @@ export default function DashboardOverview() {
                   dataKey="value"
                   className="sm:inner-radius-[60] sm:outer-radius-[80]"
                 >
-                  {orderStatusData.map((entry, index) => (
+                  {dashboardData.categoryData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
@@ -254,11 +425,15 @@ export default function DashboardOverview() {
                     color: "#FFFFFF",
                     fontSize: "14px",
                   }}
+                  formatter={(value: number) => [
+                    `¥${value.toLocaleString()}k`,
+                    "売上",
+                  ]}
                 />
               </RechartsPieChart>
             </ResponsiveContainer>
             <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mt-4">
-              {orderStatusData.map((item, index) => (
+              {dashboardData.categoryData.map((item, index) => (
                 <div key={index} className="flex items-center space-x-2">
                   <div
                     className="w-3 h-3 rounded-full"
@@ -310,7 +485,7 @@ export default function DashboardOverview() {
         <Card className="bg-slate-800 border-slate-700">
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="text-white text-lg sm:text-xl">
-              売上サマリー
+              {selectedYear}年 売上サマリー
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
@@ -320,23 +495,26 @@ export default function DashboardOverview() {
                   平均注文単価
                 </span>
                 <span className="text-white font-semibold text-sm sm:text-base">
-                  ¥4,580
+                  ¥
+                  {Math.round(
+                    dashboardData.kpis.avgOrderValue
+                  ).toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
                 <span className="text-slate-300 text-sm sm:text-base">
-                  今月の注文数
+                  {selectedYear}年の注文数
                 </span>
                 <span className="text-white font-semibold text-sm sm:text-base">
-                  621件
+                  {dashboardData.kpis.monthlyOrders.toLocaleString()}件
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
                 <span className="text-slate-300 text-sm sm:text-base">
-                  売上成長率
+                  今日の売上
                 </span>
                 <span className="text-emerald-400 font-semibold text-sm sm:text-base">
-                  +18.2%
+                  ¥{dashboardData.kpis.todaySales.toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
@@ -344,7 +522,7 @@ export default function DashboardOverview() {
                   リピート率
                 </span>
                 <span className="text-blue-400 font-semibold text-sm sm:text-base">
-                  67%
+                  {dashboardData.kpis.repeatRate}%
                 </span>
               </div>
             </div>
