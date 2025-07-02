@@ -49,7 +49,9 @@ interface DashboardData {
   kpis: {
     todaySales: number;
     monthlyTotal: number;
+    yearlyTotal: number;
     monthlyOrders: number;
+    yearlyOrders: number;
     avgOrderValue: number;
     totalSales: number;
     repeatRate: number;
@@ -58,34 +60,16 @@ interface DashboardData {
 }
 
 export default function DashboardOverview() {
+  // 現在年度をデフォルトにする
+  const currentYear = new Date().getFullYear();
+
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [selectedYear, setSelectedYear] = useState<number>(
-    new Date().getFullYear()
-  );
-
-  // 利用可能年度の生成（2024年ダミーデータ + 2025年〜現在年度）
-  const generateAvailableYears = (): number[] => {
-    const currentYear = new Date().getFullYear();
-    const serviceStartYear = 2025; // サービス開始年度
-    const dummyDataYear = 2024; // ダミーデータの年度
-
-    const years = [];
-
-    // 現在年度から2025年まで（実際のサービスデータ）
-    for (let i = currentYear; i >= serviceStartYear; i--) {
-      years.push(i);
-    }
-
-    // ダミーデータ年度を最後に追加
-    years.push(dummyDataYear);
-
-    return years; // 降順（新しい年が上）
-  };
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear); // 現在年度をデフォルト
 
   // データ取得関数
   const fetchDashboardData = async (year?: number) => {
@@ -109,12 +93,7 @@ export default function DashboardOverview() {
       const result = await response.json();
 
       if (result.success) {
-        // 利用可能年度をレスポンスに含めるか、フロントエンドで生成
-        const dataWithYears = {
-          ...result.data,
-          availableYears: generateAvailableYears(),
-        };
-        setDashboardData(dataWithYears);
+        setDashboardData(result.data);
         setLastUpdated(new Date());
       } else {
         throw new Error(result.error || "Failed to fetch data");
@@ -143,6 +122,17 @@ export default function DashboardOverview() {
   // 手動更新
   const handleRefresh = () => {
     fetchDashboardData();
+  };
+
+  // 年度のラベル生成関数
+  const getYearLabel = (year: number) => {
+    const serviceStartYear = 2025;
+
+    if (year < serviceStartYear) {
+      return `${year}年`;
+    } else {
+      return `${year}年`;
+    }
   };
 
   // エラー状態の表示
@@ -213,7 +203,7 @@ export default function DashboardOverview() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">
-            売上ダッシュボード ({selectedYear}年)
+            売上ダッシュボード ({getYearLabel(selectedYear)})
           </h1>
           <p className="text-sm sm:text-base text-slate-400">
             ECストアの売上状況を確認できます
@@ -251,7 +241,7 @@ export default function DashboardOverview() {
 
       {/* 売上KPIカード */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        {/* 今日の売上 */}
+        {/* 当日の売上または選択年度の情報 */}
         <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 border-none">
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-start justify-between">
@@ -259,21 +249,29 @@ export default function DashboardOverview() {
                 <div className="flex items-center space-x-2 mb-2">
                   <CalendarDays className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span className="text-white/80 text-xs sm:text-sm">
-                    今日の売上
+                    {selectedYear === currentYear
+                      ? "当日の売上"
+                      : `${selectedYear}年 平均注文単価`}
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥{dashboardData.kpis.todaySales.toLocaleString()}
+                  {selectedYear === currentYear
+                    ? `¥${dashboardData.kpis.todaySales.toLocaleString()}`
+                    : `¥${Math.round(
+                        dashboardData.kpis.avgOrderValue
+                      ).toLocaleString()}`}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  {new Date().toLocaleDateString("ja-JP")}
+                  {selectedYear === currentYear
+                    ? new Date().toLocaleDateString("ja-JP")
+                    : `${selectedYear}年のデータ`}
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* 今月の総売上 */}
+        {/* 月間売上または月平均売上 */}
         <Card className="bg-gradient-to-br from-blue-500 to-blue-600 border-none">
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-start justify-between">
@@ -281,21 +279,32 @@ export default function DashboardOverview() {
                 <div className="flex items-center space-x-2 mb-2">
                   <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span className="text-white/80 text-xs sm:text-sm">
-                    {selectedYear}年の月別売上
+                    {selectedYear === currentYear
+                      ? `${new Date().getMonth() + 1}月の売上`
+                      : `${selectedYear}年 月平均売上`}
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥{dashboardData.kpis.monthlyTotal.toLocaleString()}
+                  ¥
+                  {selectedYear === currentYear
+                    ? dashboardData.kpis.monthlyTotal.toLocaleString()
+                    : Math.round(
+                        dashboardData.kpis.yearlyTotal / 12
+                      ).toLocaleString()}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  {dashboardData.kpis.monthlyOrders}件の注文
+                  {selectedYear === currentYear
+                    ? `${dashboardData.kpis.monthlyOrders.toLocaleString()}件の注文`
+                    : `月平均 ${Math.round(
+                        dashboardData.kpis.yearlyOrders / 12
+                      ).toLocaleString()}件の注文`}
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* 全体の売上 */}
+        {/* 年間売上 */}
         <Card className="bg-gradient-to-br from-purple-500 to-purple-600 border-none sm:col-span-2 lg:col-span-1">
           <CardContent className="p-4 sm:p-6">
             <div className="flex items-start justify-between">
@@ -303,14 +312,15 @@ export default function DashboardOverview() {
                 <div className="flex items-center space-x-2 mb-2">
                   <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   <span className="text-white/80 text-xs sm:text-sm">
-                    全期間の売上
+                    {selectedYear}年の売上
                   </span>
                 </div>
                 <div className="text-xl sm:text-2xl font-bold text-white mb-1">
-                  ¥{dashboardData.kpis.totalSales.toLocaleString()}
+                  ¥{dashboardData.kpis.yearlyTotal.toLocaleString()}
                 </div>
                 <div className="text-white/80 text-xs sm:text-sm">
-                  累計売上 • リピート率 {dashboardData.kpis.repeatRate}%
+                  {dashboardData.kpis.yearlyOrders.toLocaleString()}件の注文 •
+                  リピート率 {dashboardData.kpis.repeatRate}%
                 </div>
               </div>
             </div>
@@ -332,13 +342,13 @@ export default function DashboardOverview() {
                   value={selectedYear.toString()}
                   onValueChange={handleYearChange}
                 >
-                  <SelectTrigger className="w-24 bg-slate-700 border-slate-600 text-white text-sm">
+                  <SelectTrigger className="w-32 bg-slate-700 border-slate-600 text-white text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {dashboardData.availableYears.map((year) => (
                       <SelectItem key={year} value={year.toString()}>
-                        {year}年
+                        {getYearLabel(year)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -506,15 +516,21 @@ export default function DashboardOverview() {
                   {selectedYear}年の注文数
                 </span>
                 <span className="text-white font-semibold text-sm sm:text-base">
-                  {dashboardData.kpis.monthlyOrders.toLocaleString()}件
+                  {dashboardData.kpis.yearlyOrders.toLocaleString()}件
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">
                 <span className="text-slate-300 text-sm sm:text-base">
-                  今日の売上
+                  {selectedYear === currentYear
+                    ? "当日の売上"
+                    : `${selectedYear}年 最高月売上`}
                 </span>
                 <span className="text-emerald-400 font-semibold text-sm sm:text-base">
-                  ¥{dashboardData.kpis.todaySales.toLocaleString()}
+                  {selectedYear === currentYear
+                    ? `¥${dashboardData.kpis.todaySales.toLocaleString()}`
+                    : `¥${Math.max(
+                        ...dashboardData.monthlySales.map((m) => m.sales)
+                      ).toLocaleString()}`}
                 </span>
               </div>
               <div className="flex justify-between items-center p-3 bg-slate-700 rounded-lg">

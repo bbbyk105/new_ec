@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// lib/db-utils.ts
+// types/db-utils.ts
 import { prisma } from "@/lib/prisma";
 import {
   OrderStatus,
@@ -30,6 +30,9 @@ type TopProductQueryResult = {
   total_quantity: bigint;
   total_sales: number;
 };
+
+// サービス開始年度の定数
+const SERVICE_START_YEAR = 2025;
 
 // 売上データ取得用の関数
 export async function getDailySalesData(startDate: Date, endDate: Date) {
@@ -62,7 +65,7 @@ export async function getCategorySalesData(startDate: Date, endDate: Date) {
   });
 }
 
-// 月次売上データ集計
+// 月次売上データ集計（年度指定版）
 export async function getMonthlySalesData(year: number) {
   const monthlyData = await prisma.$queryRaw<DailySalesQueryResult[]>`
     SELECT 
@@ -82,22 +85,26 @@ export async function getMonthlySalesData(year: number) {
   }));
 }
 
-// 今月の主要KPI取得
-export async function getCurrentMonthKPIs() {
+// 指定年度のKPI取得（修正版）
+export async function getYearlyKPIs(year: number) {
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
 
-  // 今日の売上（実際には前日のデータ）
+  // 当日の売上（今日の日付で検索）
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
   const todaySales = await prisma.dailySales.findUnique({
     where: {
-      date: yesterday,
+      date: today,
     },
   });
 
-  // 今月の累計売上
+  // 今月の累計売上（現在の年月）
+  const startOfMonth = new Date(currentYear, currentMonth, 1);
+  const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
+
   const monthlyAggregate = await prisma.dailySales.aggregate({
     where: {
       date: {
@@ -114,6 +121,23 @@ export async function getCurrentMonthKPIs() {
     },
   });
 
+  // 指定年度の累計売上
+  const startOfYear = new Date(year, 0, 1);
+  const endOfYear = new Date(year, 11, 31);
+
+  const yearlyAggregate = await prisma.dailySales.aggregate({
+    where: {
+      date: {
+        gte: startOfYear,
+        lte: endOfYear,
+      },
+    },
+    _sum: {
+      totalSales: true,
+      totalOrders: true,
+    },
+  });
+
   // 全期間の累計売上
   const totalAggregate = await prisma.dailySales.aggregate({
     _sum: {
@@ -125,39 +149,30 @@ export async function getCurrentMonthKPIs() {
   // リピート率計算（複数回注文した顧客の割合）
   const totalCustomers = await prisma.customer.count();
 
-  const customersWithMultipleOrders = await prisma.customer.count({
-    where: {
-      orders: {
-        some: {
-          AND: [
-            { status: OrderStatus.DELIVERED },
-            {
-              customer: {
-                orders: {
-                  some: {
-                    status: OrderStatus.DELIVERED,
-                    id: {
-                      not: undefined,
-                    },
-                  },
-                },
-              },
-            },
-          ],
-        },
-      },
-    },
-  });
+  const repeatCustomers = await prisma.$queryRaw<[{ count: bigint }]>`
+    SELECT COUNT(DISTINCT customer_id) as count
+    FROM (
+      SELECT "customerId" as customer_id, COUNT(*) as order_count
+      FROM orders
+      WHERE status = 'DELIVERED'
+      GROUP BY "customerId"
+      HAVING COUNT(*) > 1
+    ) repeat_customers
+  `;
 
   const repeatRate =
     totalCustomers > 0
-      ? Math.round((customersWithMultipleOrders / totalCustomers) * 100)
+      ? Math.round(
+          (Number(repeatCustomers[0]?.count || 0) / totalCustomers) * 100
+        )
       : 0;
 
   return {
     todaySales: Number(todaySales?.totalSales || 0),
     monthlyTotal: Number(monthlyAggregate._sum.totalSales || 0),
+    yearlyTotal: Number(yearlyAggregate._sum.totalSales || 0),
     monthlyOrders: Number(monthlyAggregate._sum.totalOrders || 0),
+    yearlyOrders: Number(yearlyAggregate._sum.totalOrders || 0),
     avgOrderValue: Number(monthlyAggregate._avg.avgOrderValue || 0),
     totalSales: Number(totalAggregate._sum.totalSales || 0),
     repeatRate,
@@ -326,19 +341,22 @@ export async function updateDailySalesData(date: Date) {
   }
 }
 
-// ダッシュボード用のデータ取得関数（改良版）
+// ダッシュボード用のデータ取得関数（修正版）
 export async function getDashboardData(year?: number) {
-  const targetYear = year || new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
+  const targetYear = year || currentYear; // デフォルトは現在年度
   const startOfYear = new Date(targetYear, 0, 1);
   const endOfYear = new Date(targetYear, 11, 31);
 
   try {
     // 並列でデータを取得してパフォーマンスを向上
-    const [monthlySales, categorySales, kpis] = await Promise.all([
-      getMonthlySalesData(targetYear),
-      getCategorySalesData(startOfYear, endOfYear),
-      getCurrentMonthKPIs(),
-    ]);
+    const [monthlySales, categorySales, kpis, availableYears] =
+      await Promise.all([
+        getMonthlySalesData(targetYear),
+        getCategorySalesData(startOfYear, endOfYear),
+        getYearlyKPIs(targetYear),
+        getAvailableYears(),
+      ]);
 
     // カテゴリ別売上を集計
     const categoryTotals = new Map<string, number>();
@@ -378,6 +396,7 @@ export async function getDashboardData(year?: number) {
       monthlySales: completeMonthlyData,
       categoryData,
       kpis,
+      availableYears,
       selectedYear: targetYear,
     };
   } catch (error) {
@@ -397,38 +416,51 @@ function getCategoryColor(categoryName: string): string {
   return colorMap[categoryName] || "#6B7280";
 }
 
-// 年度別データの存在確認（データベースにある年度 + 現在年度まで）
+// 年度別データの存在確認（修正版）
 export async function getAvailableYears(): Promise<number[]> {
   try {
     const currentYear = new Date().getFullYear();
 
     // データベースから実際にデータが存在する年度を取得
-    const years = await prisma.$queryRaw<{ year: number }[]>`
+    const yearsWithData = await prisma.$queryRaw<{ year: number }[]>`
       SELECT DISTINCT EXTRACT(YEAR FROM date) as year
       FROM daily_sales
       ORDER BY year DESC
     `;
 
-    const dbYears = years.map((row) => Number(row.year));
+    const dbYears = yearsWithData.map((row) => Number(row.year));
 
-    // 現在年度から2020年までを生成
-    const allPossibleYears = [];
-    for (let i = currentYear; i >= 2020; i--) {
-      allPossibleYears.push(i);
+    // 年度リストを作成
+    const availableYears = new Set<number>();
+
+    // 1. データベースにある年度を追加（サービス開始年度以前の参考データ）
+    dbYears.forEach((year) => {
+      if (year < SERVICE_START_YEAR && year >= 2020) {
+        // 2020年以降の参考データのみ表示
+        availableYears.add(year);
+      } else if (year >= SERVICE_START_YEAR && year <= currentYear) {
+        // サービス開始年度以降で現在年度まで
+        availableYears.add(year);
+      }
+    });
+
+    // 2. サービス開始年度から現在年度までを追加（データがなくても表示）
+    for (let year = SERVICE_START_YEAR; year <= currentYear; year++) {
+      availableYears.add(year);
     }
 
-    // データベースにある年度 + 現在年度まで（重複排除）
-    const allYears = new Set([...dbYears, ...allPossibleYears]);
-
-    return Array.from(allYears).sort((a, b) => b - a); // 降順でソート
+    return Array.from(availableYears).sort((a, b) => b - a); // 降順でソート
   } catch (error) {
     console.error("Error getting available years:", error);
-    // エラーの場合は現在年度から2020年まで返す
+    // エラーの場合は現在年度とサービス開始年度を返す
     const currentYear = new Date().getFullYear();
     const years = [];
-    for (let i = currentYear; i >= 2020; i--) {
+
+    // サービス開始年度から現在年度まで
+    for (let i = currentYear; i >= SERVICE_START_YEAR; i--) {
       years.push(i);
     }
+
     return years;
   }
 }

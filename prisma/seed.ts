@@ -96,8 +96,10 @@ async function main() {
     ];
 
     for (const productData of products) {
-      await prisma.product.create({
-        data: productData,
+      await prisma.product.upsert({
+        where: { sku: productData.sku },
+        update: {},
+        create: productData,
       });
     }
 
@@ -116,6 +118,11 @@ async function main() {
       name: "佐藤花子",
       phone: "090-8765-4321",
     },
+    {
+      email: "customer3@example.com",
+      name: "鈴木一郎",
+      phone: "090-1111-2222",
+    },
   ];
 
   for (const customerData of customers) {
@@ -126,8 +133,11 @@ async function main() {
     });
 
     // 住所情報も追加
-    await prisma.address.create({
-      data: {
+    await prisma.address.upsert({
+      where: { id: `addr-${customer.id}` },
+      update: {},
+      create: {
+        id: `addr-${customer.id}`,
         customerId: customer.id,
         name: customerData.name,
         zipCode: "100-0001",
@@ -143,56 +153,68 @@ async function main() {
 
   console.log("✅ サンプル顧客を作成しました");
 
-  // 5. サンプル注文データ作成（過去9ヶ月分）
-  const customer1 = await prisma.customer.findUnique({
-    where: { email: "customer1@example.com" },
+  // 5. サンプル注文データ作成（2024年と2025年のデータ）
+  const allCustomers = await prisma.customer.findMany({
     include: { addresses: true },
   });
-
-  const customer2 = await prisma.customer.findUnique({
-    where: { email: "customer2@example.com" },
-    include: { addresses: true },
-  });
-
   const allProducts = await prisma.product.findMany();
 
-  if (
-    customer1 &&
-    customer2 &&
-    customer1.addresses[0] &&
-    customer2.addresses[0]
-  ) {
-    // 過去9ヶ月のサンプル注文データ
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 9);
+  // 2024年のデータ（ダミーデータ）
+  await generateOrdersForYear(2024, allCustomers, allProducts);
 
-    for (let i = 0; i < 9; i++) {
-      const orderDate = new Date(startDate);
-      orderDate.setMonth(orderDate.getMonth() + i);
+  // 2025年のデータ（現在進行中）
+  await generateOrdersForYear(2025, allCustomers, allProducts);
 
-      // 月あたり複数の注文を作成
-      const ordersPerMonth = Math.floor(Math.random() * 15) + 10; // 10-25件
+  console.log("✅ サンプル注文データを作成しました");
 
-      for (let j = 0; j < ordersPerMonth; j++) {
-        const randomCustomer = Math.random() > 0.5 ? customer1 : customer2;
-        const orderDay = new Date(orderDate);
-        orderDay.setDate(Math.floor(Math.random() * 28) + 1);
+  // 6. 売上サマリーデータの作成
+  await generateDailySalesData();
 
-        const orderNumber = `ORD-${orderDay.getFullYear()}${String(
-          orderDay.getMonth() + 1
-        ).padStart(2, "0")}${String(orderDay.getDate()).padStart(
+  console.log("✅ 売上サマリーデータを作成しました");
+  console.log("🎉 シードデータの投入が完了しました！");
+}
+
+// 年度別注文データ生成関数
+async function generateOrdersForYear(
+  year: number,
+  customers: any[],
+  products: any[]
+) {
+  const monthsToGenerate = year === 2025 ? new Date().getMonth() + 1 : 12;
+
+  for (let month = 0; month < monthsToGenerate; month++) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // 月あたりの注文数（季節変動を考慮）
+    const baseOrdersPerMonth = 20;
+    const seasonalMultiplier = [
+      0.8, 0.7, 0.9, 1.0, 1.1, 1.0, 0.9, 0.8, 0.9, 1.1, 1.3, 1.5,
+    ][month];
+    const ordersThisMonth = Math.floor(baseOrdersPerMonth * seasonalMultiplier);
+
+    for (let orderIndex = 0; orderIndex < ordersThisMonth; orderIndex++) {
+      const randomCustomer =
+        customers[Math.floor(Math.random() * customers.length)];
+      const orderDay = Math.floor(Math.random() * daysInMonth) + 1;
+      const orderDate = new Date(year, month, orderDay);
+
+      // 過去の日付のみ注文を作成
+      if (orderDate <= new Date()) {
+        const orderNumber = `ORD-${year}${String(month + 1).padStart(
           2,
           "0"
-        )}-${String(j + 1).padStart(3, "0")}`;
+        )}${String(orderDay).padStart(2, "0")}-${String(
+          orderIndex + 1
+        ).padStart(3, "0")}`;
 
         // ランダムな商品を選択
-        const selectedProducts = allProducts
+        const selectedProducts = products
           .sort(() => 0.5 - Math.random())
-          .slice(0, Math.floor(Math.random() * 3) + 1); // 1-3商品
+          .slice(0, Math.floor(Math.random() * 3) + 1);
 
         let subtotal = 0;
         const orderItems = selectedProducts.map((product) => {
-          const quantity = Math.floor(Math.random() * 3) + 1; // 1-3個
+          const quantity = Math.floor(Math.random() * 3) + 1;
           const itemTotal = Number(product.price) * quantity;
           subtotal += itemTotal;
 
@@ -204,11 +226,10 @@ async function main() {
           };
         });
 
-        const shippingFee = subtotal >= 5000 ? 0 : 500; // 5000円以上で送料無料
-        const tax = Math.floor(subtotal * 0.1); // 10%税
+        const shippingFee = subtotal >= 5000 ? 0 : 500;
+        const tax = Math.floor(subtotal * 0.1);
         const total = subtotal + shippingFee + tax;
 
-        // 決済方法をランダムに選択（型安全）
         const paymentMethods: PaymentMethod[] = [
           PaymentMethod.CREDIT_CARD,
           PaymentMethod.BANK_TRANSFER,
@@ -229,8 +250,8 @@ async function main() {
             total,
             paymentMethod: selectedPaymentMethod,
             paymentStatus: "COMPLETED",
-            deliveredAt: orderDay,
-            createdAt: orderDay,
+            deliveredAt: orderDate,
+            createdAt: orderDate,
             orderItems: {
               create: orderItems,
             },
@@ -238,15 +259,7 @@ async function main() {
         });
       }
     }
-
-    console.log("✅ サンプル注文データを作成しました");
   }
-
-  // 6. 売上サマリーデータの作成
-  await generateDailySalesData();
-
-  console.log("✅ 売上サマリーデータを作成しました");
-  console.log("🎉 シードデータの投入が完了しました！");
 }
 
 // 日次売上データを生成する関数

@@ -1,60 +1,82 @@
-// app/api/dashboard/route.ts
-import { NextResponse, NextRequest } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth"; // Next-Authの設定をインポート
+import { NextRequest, NextResponse } from "next/server";
 import { getDashboardData } from "@/types/db-utils";
 
 export async function GET(request: NextRequest) {
   try {
-    // セッション認証チェック
-    const session = await getServerSession(authOptions);
+    const searchParams = request.nextUrl.searchParams;
+    const yearParam = searchParams.get("year");
 
-    if (!session || session.user.role !== "ADMIN") {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized - Admin access required",
-        },
-        { status: 401 }
-      );
-    }
-
-    // URLパラメータから年度を取得
-    const { searchParams } = new URL(request.url);
-    const year = searchParams.get("year");
-    const targetYear = year ? parseInt(year) : new Date().getFullYear();
-
-    // 年度が有効な範囲内かチェック（2020年〜現在年度）
+    // 現在年度をデフォルトにする
     const currentYear = new Date().getFullYear();
+    const year = yearParam ? parseInt(yearParam) : currentYear;
 
-    if (targetYear < 2020 || targetYear > currentYear) {
+    // 年度の妥当性をチェック
+    if (isNaN(year) || year < 2020 || year > currentYear) {
       return NextResponse.json(
         {
           success: false,
-          error: `Invalid year parameter - only 2020-${currentYear} are allowed`,
+          error: "無効な年度が指定されました",
         },
         { status: 400 }
       );
     }
 
-    const dashboardData = await getDashboardData(targetYear);
+    const data = await getDashboardData(year);
 
     return NextResponse.json({
       success: true,
-      data: dashboardData,
-      year: targetYear,
+      data,
+      message: "ダッシュボードデータを取得しました",
     });
   } catch (error) {
-    console.error("Dashboard API Error:", error);
+    console.error("Dashboard API error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch dashboard data",
+        error: "データベースエラーが発生しました",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
     );
   }
 }
 
-export const dynamic = "force-dynamic"; // リアルタイム更新のため
+// POSTメソッドでデータ更新（必要に応じて）
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { action } = body;
+
+    if (action === "refresh") {
+      // 手動更新の場合、現在年度のデータを取得
+      const currentYear = new Date().getFullYear();
+      const data = await getDashboardData(currentYear);
+
+      return NextResponse.json({
+        success: true,
+        data,
+        message: "データを更新しました",
+      });
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "不正なアクションです",
+      },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error("Dashboard POST API error:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "データ更新に失敗しました",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 }
+    );
+  }
+}
