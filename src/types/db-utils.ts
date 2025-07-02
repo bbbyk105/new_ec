@@ -94,12 +94,35 @@ export async function getYearlyKPIs(year: number) {
   // 当日の売上（今日の日付で検索）
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
 
+  // まずdaily_salesテーブルから取得を試す
+  let todaySalesAmount = 0;
   const todaySales = await prisma.dailySales.findUnique({
     where: {
       date: today,
     },
   });
+
+  if (todaySales) {
+    todaySalesAmount = Number(todaySales.totalSales);
+  } else {
+    // daily_salesにデータがない場合は、ordersテーブルから直接計算
+    const todayOrders = await prisma.order.aggregate({
+      where: {
+        status: "DELIVERED",
+        deliveredAt: {
+          gte: today,
+          lte: todayEnd,
+        },
+      },
+      _sum: {
+        total: true,
+      },
+    });
+    todaySalesAmount = Number(todayOrders._sum.total || 0);
+  }
 
   // 今月の累計売上（現在の年月のみ）
   const startOfMonth = new Date(currentYear, currentMonth, 1);
@@ -171,7 +194,7 @@ export async function getYearlyKPIs(year: number) {
       : 0;
 
   return {
-    todaySales: Number(todaySales?.totalSales || 0),
+    todaySales: todaySalesAmount, // 修正済み
     monthlyTotal: Number(monthlyAggregate._sum.totalSales || 0),
     yearlyTotal: yearlyTotalSales,
     monthlyOrders: Number(monthlyAggregate._sum.totalOrders || 0),
