@@ -54,6 +54,7 @@ import {
   AlertTriangle,
   MoreHorizontal,
   Loader2,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
@@ -115,6 +116,16 @@ interface ProductFormData {
   isActive: boolean;
 }
 
+// 在庫状況の定義
+type StockStatus = "all" | "in_stock" | "low_stock" | "out_of_stock";
+
+// 在庫状況を判定する関数
+const getStockStatus = (product: Product): StockStatus => {
+  if (product.stock === 0) return "out_of_stock";
+  if (product.stock <= product.lowStockThreshold) return "low_stock";
+  return "in_stock";
+};
+
 // 在庫状況バッジを取得する関数
 const getStockStatusBadge = (product: Product) => {
   if (product.stock === 0) {
@@ -142,35 +153,20 @@ const getPublishStatusBadge = (product: Product) => {
   return <Badge className="bg-gray-500 text-white font-medium">非公開</Badge>;
 };
 
-const getStatusBadge = (product: Product) => {
-  if (!product.isActive) {
-    return <Badge className="bg-gray-500 text-white font-medium">非公開</Badge>;
-  }
-  if (product.stock === 0) {
-    return (
-      <Badge className="bg-red-500 text-white font-medium">在庫切れ</Badge>
-    );
-  }
-  if (product.stock <= product.lowStockThreshold) {
-    return (
-      <Badge className="bg-yellow-500 text-white font-medium">在庫少</Badge>
-    );
-  }
-  return <Badge className="bg-green-500 text-white font-medium">公開中</Badge>;
-};
-
 export default function ProductsPage() {
   const { toast } = useToast();
 
   // State管理
   const [products, setProducts] = useState<Product[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [stockFilter, setStockFilter] = useState<StockStatus>("all");
+  const [publishFilter, setPublishFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
 
   // モーダル状態
   const [viewModalOpen, setViewModalOpen] = useState(false);
@@ -194,6 +190,44 @@ export default function ProductsPage() {
   });
   const [formLoading, setFormLoading] = useState(false);
 
+  // フィルタリング処理
+  const applyFilters = () => {
+    let filtered = [...products];
+
+    // 検索フィルター
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (product) =>
+          product.name.toLowerCase().includes(searchLower) ||
+          product.description.toLowerCase().includes(searchLower) ||
+          (product.sku && product.sku.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // カテゴリフィルター
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter(
+        (product) => product.categoryId === categoryFilter
+      );
+    }
+
+    // 在庫状況フィルター
+    if (stockFilter !== "all") {
+      filtered = filtered.filter(
+        (product) => getStockStatus(product) === stockFilter
+      );
+    }
+
+    // 公開状態フィルター
+    if (publishFilter !== "all") {
+      const isActive = publishFilter === "published";
+      filtered = filtered.filter((product) => product.isActive === isActive);
+    }
+
+    setFilteredProducts(filtered);
+  };
+
   // データ取得
   const fetchProducts = async (page = 1) => {
     try {
@@ -203,9 +237,6 @@ export default function ProductsPage() {
         limit: "10",
       });
 
-      if (searchTerm) params.append("search", searchTerm);
-      if (categoryFilter !== "all") params.append("category", categoryFilter);
-
       const response = await fetch(`/api/products?${params.toString()}`);
       const data: ProductResponse = await response.json();
 
@@ -213,7 +244,6 @@ export default function ProductsPage() {
         setProducts(data.data.products);
         setCurrentPage(data.data.pagination.page);
         setTotalPages(data.data.pagination.totalPages);
-        setTotalCount(data.data.pagination.total);
       } else {
         toast({
           title: "エラー",
@@ -376,15 +406,33 @@ export default function ProductsPage() {
     setDeleteAlertOpen(true);
   };
 
-  // 統計計算
+  // フィルターリセット
+  const resetFilters = () => {
+    setSearchTerm("");
+    setCategoryFilter("all");
+    setStockFilter("all");
+    setPublishFilter("all");
+  };
+
+  // アクティブなフィルター数を計算
+  const getActiveFilterCount = () => {
+    let count = 0;
+    if (searchTerm) count++;
+    if (categoryFilter !== "all") count++;
+    if (stockFilter !== "all") count++;
+    if (publishFilter !== "all") count++;
+    return count;
+  };
+
+  // 統計計算（フィルター適用後のデータから）
   const stats = {
-    total: totalCount,
-    published: products.filter((p) => p.isActive).length,
-    draft: products.filter((p) => !p.isActive).length,
-    lowStock: products.filter(
+    total: filteredProducts.length,
+    published: filteredProducts.filter((p) => p.isActive).length,
+    draft: filteredProducts.filter((p) => !p.isActive).length,
+    lowStock: filteredProducts.filter(
       (p) => p.stock <= p.lowStockThreshold && p.stock > 0
     ).length,
-    outOfStock: products.filter((p) => p.stock === 0).length,
+    outOfStock: filteredProducts.filter((p) => p.stock === 0).length,
   };
 
   // 初期データ取得
@@ -393,15 +441,10 @@ export default function ProductsPage() {
     fetchProducts();
   }, []);
 
-  // 検索・フィルター変更時
+  // フィルター適用
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
-      fetchProducts(1);
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, categoryFilter]);
+    applyFilters();
+  }, [products, searchTerm, categoryFilter, stockFilter, publishFilter]);
 
   return (
     <div className="p-4 sm:p-6 bg-slate-900 min-h-screen">
@@ -509,38 +552,154 @@ export default function ProductsPage() {
       {/* フィルターと検索 */}
       <Card className="bg-slate-800 border-slate-700 mb-6">
         <CardContent className="p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
+          <div className="space-y-4">
+            {/* 検索バー */}
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
               <Input
-                placeholder="商品名で検索..."
+                placeholder="商品名、説明、商品コードで検索"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500"
               />
             </div>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-48 bg-slate-700 border-slate-600 text-white focus:border-emerald-500 focus:ring-emerald-500">
-                <SelectValue placeholder="カテゴリで絞り込み" />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-700 border-slate-600">
-                <SelectItem
-                  value="all"
-                  className="text-white hover:bg-slate-600"
+
+            {/* フィルター */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1">
+                <Label className="text-slate-300 text-sm mb-2 block">
+                  カテゴリ
+                </Label>
+                <Select
+                  value={categoryFilter}
+                  onValueChange={setCategoryFilter}
                 >
-                  すべてのカテゴリ
-                </SelectItem>
-                {categories.map((category) => (
-                  <SelectItem
-                    key={category.id}
-                    value={category.id}
-                    className="text-white hover:bg-slate-600"
-                  >
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-emerald-500 focus:ring-emerald-500">
+                    <SelectValue placeholder="カテゴリで絞り込み" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem
+                      value="all"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      すべてのカテゴリ
+                    </SelectItem>
+                    {categories.map((category) => (
+                      <SelectItem
+                        key={category.id}
+                        value={category.id}
+                        className="text-white hover:bg-slate-600"
+                      >
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-1">
+                <Label className="text-slate-300 text-sm mb-2 block">
+                  在庫状況
+                </Label>
+                <Select
+                  value={stockFilter}
+                  onValueChange={(value: StockStatus) => setStockFilter(value)}
+                >
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-emerald-500 focus:ring-emerald-500">
+                    <SelectValue placeholder="在庫状況で絞り込み" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem
+                      value="all"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      すべての在庫状況
+                    </SelectItem>
+                    <SelectItem
+                      value="in_stock"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        在庫あり
+                      </div>
+                    </SelectItem>
+                    <SelectItem
+                      value="low_stock"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-yellow-500 rounded-full mr-2"></div>
+                        在庫少
+                      </div>
+                    </SelectItem>
+                    <SelectItem
+                      value="out_of_stock"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-red-500 rounded-full mr-2"></div>
+                        在庫切れ
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex-1">
+                <Label className="text-slate-300 text-sm mb-2 block">
+                  公開状態
+                </Label>
+                <Select value={publishFilter} onValueChange={setPublishFilter}>
+                  <SelectTrigger className="bg-slate-700 border-slate-600 text-white focus:border-emerald-500 focus:ring-emerald-500">
+                    <SelectValue placeholder="公開状態で絞り込み" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-700 border-slate-600">
+                    <SelectItem
+                      value="all"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      すべての状態
+                    </SelectItem>
+                    <SelectItem
+                      value="published"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full mr-2"></div>
+                        公開中
+                      </div>
+                    </SelectItem>
+                    <SelectItem
+                      value="draft"
+                      className="text-white hover:bg-slate-600"
+                    >
+                      <div className="flex items-center">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full mr-2"></div>
+                        非公開
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* フィルターアクション */}
+            {getActiveFilterCount() > 0 && (
+              <div className="flex items-center justify-between pt-2 border-t border-slate-700">
+                <div className="flex items-center text-sm text-slate-300">
+                  <Filter className="w-4 h-4 mr-2" />
+                  {getActiveFilterCount()}個のフィルターが適用中
+                </div>
+                <Button
+                  size="sm"
+                  onClick={resetFilters}
+                  className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                >
+                  フィルターをリセット
+                </Button>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -559,7 +718,7 @@ export default function ProductsPage() {
           <Card className="bg-slate-800 border-slate-700 hidden md:block">
             <CardHeader>
               <CardTitle className="text-white text-lg font-semibold">
-                商品一覧
+                商品一覧 ({filteredProducts.length}件)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
@@ -594,7 +753,7 @@ export default function ProductsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => (
+                    {filteredProducts.map((product) => (
                       <TableRow
                         key={product.id}
                         className="border-slate-700 hover:bg-slate-750 transition-colors duration-150"
@@ -669,7 +828,7 @@ export default function ProductsPage() {
               </div>
 
               {/* 結果が見つからない場合の表示 */}
-              {products.length === 0 && (
+              {filteredProducts.length === 0 && (
                 <div className="text-center py-12">
                   <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" />
                   <p className="text-slate-300 text-lg mb-2 font-medium">
@@ -685,7 +844,7 @@ export default function ProductsPage() {
 
           {/* 商品カード（モバイル） */}
           <div className="md:hidden space-y-4">
-            {products.map((product) => (
+            {filteredProducts.map((product) => (
               <Card
                 key={product.id}
                 className="bg-slate-800 border-slate-700 hover:bg-slate-750 transition-colors duration-200"
@@ -770,7 +929,7 @@ export default function ProductsPage() {
             ))}
 
             {/* モバイル版：結果が見つからない場合の表示 */}
-            {products.length === 0 && (
+            {filteredProducts.length === 0 && (
               <Card className="bg-slate-800 border-slate-700">
                 <CardContent className="p-8 text-center">
                   <Package className="w-16 h-16 text-slate-500 mx-auto mb-4" />
@@ -874,7 +1033,10 @@ export default function ProductsPage() {
               </div>
               <div>
                 <Label className="text-slate-300">ステータス</Label>
-                <div className="mt-1">{getStatusBadge(selectedProduct)}</div>
+                <div className="mt-1 flex space-x-2">
+                  {getStockStatusBadge(selectedProduct)}
+                  {getPublishStatusBadge(selectedProduct)}
+                </div>
               </div>
             </div>
           )}
