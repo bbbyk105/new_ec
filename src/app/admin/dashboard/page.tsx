@@ -31,6 +31,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import Link from "next/link";
 
 // 型定義
 interface DashboardData {
@@ -459,13 +460,15 @@ export default function DashboardOverview() {
               <CardTitle className="text-white text-lg sm:text-xl">
                 商品管理
               </CardTitle>
-              <Button
-                size="sm"
-                className="bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                商品追加
-              </Button>
+              <Link href={"/admin/dashboard/add-products"}>
+                <Button
+                  size="sm"
+                  className="bg-emerald-500 hover:bg-emerald-600 w-full sm:w-auto"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  商品追加
+                </Button>
+              </Link>
             </div>
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
