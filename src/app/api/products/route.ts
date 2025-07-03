@@ -443,13 +443,18 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // 注文に含まれている商品かチェック
-    const orderItemsCount = await prisma.orderItem.count({
-      where: { productId: id },
-    });
+    // 関連データの存在確認
+    const [orderItemsCount, stockHistoryCount] = await Promise.all([
+      prisma.orderItem.count({
+        where: { productId: id },
+      }),
+      prisma.stockHistory.count({
+        where: { productId: id },
+      }),
+    ]);
 
-    if (orderItemsCount > 0) {
-      // 注文履歴がある場合は論理削除（非アクティブ化）
+    if (orderItemsCount > 0 || stockHistoryCount > 0) {
+      // 注文履歴または在庫履歴がある場合は論理削除（非アクティブ化）
       const updatedProduct = await prisma.product.update({
         where: { id },
         data: { isActive: false },
@@ -463,14 +468,19 @@ export async function DELETE(request: NextRequest) {
         },
       });
 
+      const reason = [];
+      if (orderItemsCount > 0) reason.push("注文履歴");
+      if (stockHistoryCount > 0) reason.push("在庫履歴");
+
       return NextResponse.json({
         success: true,
         data: updatedProduct,
-        message:
-          "商品を非アクティブ化しました（注文履歴があるため物理削除はできません）",
+        message: `商品を非アクティブ化しました（${reason.join(
+          "・"
+        )}があるため物理削除はできません）`,
       });
     } else {
-      // 注文履歴がない場合は物理削除
+      // 関連データがない場合のみ物理削除
       await prisma.product.delete({
         where: { id },
       });
@@ -482,6 +492,21 @@ export async function DELETE(request: NextRequest) {
     }
   } catch (error) {
     console.error("商品削除エラー:", error);
+
+    // 外部キー制約エラーのハンドリング
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2003") {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              "この商品は他のデータから参照されているため削除できません。非アクティブ化を検討してください。",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         success: false,
